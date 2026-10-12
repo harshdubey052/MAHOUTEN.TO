@@ -1,9 +1,14 @@
 import axios from 'axios';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: API_BASE,
   withCredentials: true,
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+  },
 });
 
 // Attach access token from localStorage
@@ -24,7 +29,14 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry && !isAuthUrl) {
       original._retry = true;
       try {
-        const { data } = await axios.post('/api/v1/auth/refresh/', {}, { withCredentials: true });
+        const { data } = await axios.post(
+          `${API_BASE}/api/v1/auth/refresh/`,
+          {},
+          {
+            withCredentials: true,
+            headers: { 'ngrok-skip-browser-warning': 'true' },
+          }
+        );
         localStorage.setItem('access_token', data.access);
         original.headers.Authorization = `Bearer ${data.access}`;
         return api(original);
