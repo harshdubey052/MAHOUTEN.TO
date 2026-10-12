@@ -39,19 +39,19 @@ class Anime(me.Document):
     slug = me.StringField(required=True, unique=True, max_length=220)
     synopsis = me.StringField(default='')
     genres = me.ListField(me.StringField(), default=list) # stores genre names or slugs
-    year = me.IntField(default=2024)
-    studio = me.StringField(default='Mappa')
+    year = me.IntField(default=datetime.datetime.utcnow().year)
+    studio = me.StringField(default='')
     status = me.StringField(choices=STATUS_CHOICES, default='ongoing')
     type = me.StringField(choices=TYPE_CHOICES, default='series')
-    rating = me.FloatField(default=8.0) # 0.0 to 10.0
-    age_rating = me.StringField(default='PG-13')
+    rating = me.FloatField(default=0.0) # 0.0 to 10.0
+    age_rating = me.StringField(default='')
     poster = me.StringField(default='') # URL or media path
     banner = me.StringField(default='') # Hero banner URL
     trailer_url = me.StringField(default='')
     featured = me.BooleanField(default=False)
     publish_status = me.StringField(choices=PUBLISH_CHOICES, default='published')
     publish_at = me.DateTimeField(default=datetime.datetime.utcnow)
-    created_by = me.StringField(default='admin')
+    created_by = me.StringField(default='system')
     created_at = me.DateTimeField(default=datetime.datetime.utcnow)
     updated_at = me.DateTimeField(default=datetime.datetime.utcnow)
 

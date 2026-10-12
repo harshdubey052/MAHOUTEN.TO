@@ -10,7 +10,6 @@ const features = [
   { icon: Globe, title: 'Multi-Language Subs', desc: 'English, Japanese, and more languages.' },
 ];
 
-const HERO_BG = 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=1920&auto=format&fit=crop&q=85';
 const HERO_BG = '/wallpaper.png';
 
 export default function LandingPage() {

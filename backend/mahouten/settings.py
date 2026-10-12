@@ -12,7 +12,11 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-mahouten-magic-anim
 
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = ['*']
+raw_allowed_hosts = os.getenv('ALLOWED_HOSTS', '*')
+if raw_allowed_hosts == '*':
+    ALLOWED_HOSTS = ['*']
+else:
+    ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(',') if h.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -90,13 +94,21 @@ _SKIP_MONGO = os.getenv('RENDER_BUILD', '') == '1'
 if not _SKIP_MONGO:
     try:
         import pymongo
-        timeout_ms = 5000 if ('mongodb+srv://' in MONGO_URI or '@' in MONGO_URI) else 800
-        test_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=timeout_ms)
+        mongo_kwargs = {}
+        if 'mongodb+srv://' in MONGO_URI or 'ssl=true' in MONGO_URI.lower():
+            try:
+                import certifi
+                mongo_kwargs['tlsCAFile'] = certifi.where()
+            except ImportError:
+                pass
+        timeout_ms = 7000 if ('mongodb+srv://' in MONGO_URI or '@' in MONGO_URI) else 1000
+        test_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=timeout_ms, **mongo_kwargs)
         test_client.server_info()
         mongoengine.connect(
             db=MONGO_DB_NAME,
             host=MONGO_URI,
-            connect=True
+            connect=True,
+            **mongo_kwargs
         )
         print("[MongoDB] Connected successfully to live MongoDB instance.")
     except Exception as live_err:
@@ -129,22 +141,65 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Cloudinary Media Configuration
+CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME', '')
+CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY', '')
+CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET', '')
+CLOUDINARY_URL = os.getenv('CLOUDINARY_URL', '')
+
+if (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET) or CLOUDINARY_URL:
+    try:
+        import cloudinary
+        cloudinary.config(
+            cloud_name=CLOUDINARY_CLOUD_NAME or None,
+            api_key=CLOUDINARY_API_KEY or None,
+            api_secret=CLOUDINARY_API_SECRET or None,
+            cloudinary_url=CLOUDINARY_URL or None,
+            secure=True
+        )
+        CLOUDINARY_ENABLED = True
+        print("[Cloudinary] Configured successfully for production media storage.")
+    except Exception as e:
+        CLOUDINARY_ENABLED = False
+        print(f"[Cloudinary Warning] Failed to initialize Cloudinary ({e}). Using local fallback.")
+else:
+    CLOUDINARY_ENABLED = False
+    print("[Cloudinary] Credentials not provided. Media uploads will use local fallback.")
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS & CSRF
+# CORS & CSRF Configuration for Vercel + Render
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+    r"^https://.*\.onrender\.com$",
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
 ]
 CSRF_TRUSTED_ORIGINS = [
+    'https://*.vercel.app',
+    'https://*.onrender.com',
     'https://*.ngrok-free.app',
     'https://*.ngrok.io',
-    'https://*.onrender.com',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
 ]
+
+_EXTRA_CORS = os.getenv('CORS_ALLOWED_ORIGINS', '')
+if _EXTRA_CORS:
+    for origin in _EXTRA_CORS.split(','):
+        origin = origin.strip()
+        if origin and origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(origin)
+
+# Cross-Site Cookie Defaults for Decoupled Frontend (Vercel) & Backend (Render)
+SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
 
 # REST Framework
 REST_FRAMEWORK = {

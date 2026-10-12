@@ -5,6 +5,7 @@ import { ArrowLeft, SkipForward, AlertCircle } from 'lucide-react';
 import { catalogApi, streamingApi } from '../../api/index.js';
 import { useProfile } from '../../context/ProfileContext.jsx';
 import VideoPlayer from '../../components/user/VideoPlayer.jsx';
+import { getMediaUrl } from '../../utils/media.js';
 
 export default function WatchPage() {
   const { animeSlug, episodeId } = useParams();
@@ -71,7 +72,7 @@ export default function WatchPage() {
     );
   }
 
-  const streamSource = currentEpisode.hls_url || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+  const streamSource = getMediaUrl(currentEpisode.hls_url) || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 
   return (
     <div className="relative h-screen w-screen bg-black overflow-hidden select-none">

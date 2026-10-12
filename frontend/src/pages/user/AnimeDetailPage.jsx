@@ -7,6 +7,7 @@ import { catalogApi, libraryApi } from '../../api/index.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useProfile } from '../../context/ProfileContext.jsx';
 import AnimeCarousel from '../../components/user/AnimeCarousel.jsx';
+import { getMediaUrl } from '../../utils/media.js';
 
 export default function AnimeDetailPage() {
   const { slug } = useParams();
@@ -106,7 +107,7 @@ export default function AnimeDetailPage() {
       {/* Banner */}
       <div className="relative w-full overflow-hidden" style={{ height: 'clamp(400px, 55vh, 620px)' }}>
         <img
-          src={anime.banner && !anime.banner.includes('1579783900882') ? anime.banner : (anime.poster || '/wallpaper.png')}
+          src={getMediaUrl(anime.banner && !anime.banner.includes('1579783900882') ? anime.banner : (anime.poster || '/wallpaper.png'))}
           alt={anime.title}
           className="w-full h-full object-cover object-[50%_30%]"
         />

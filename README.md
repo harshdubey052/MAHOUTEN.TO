@@ -92,14 +92,10 @@ $env:PYTHONIOENCODING="utf-8"
 python seed_data.py
 ```
 
-### Step 2: Seed Accounts
-Default test credentials created by `seed_data.py`:
-- **Admin**: `admin@mahouten.to` / `admin12345` (Full access to `/admin` and user app)
-- **User**: `user@mahouten.to` / `user12345` (Viewer app access, blocked from `/admin`)
-
-To create an additional admin at any time:
+### Step 2: Create Administrator Account
+You can create an administrator account either by setting `ADMIN_EMAIL` and `ADMIN_PASSWORD` in your `.env`, or via the CLI:
 ```powershell
-python manage.py createadmin --email newadmin@mahouten.to --password adminpass
+python manage.py createadmin --email your@email.com --password yourpassword
 ```
 
 ### Step 3: Run Backend Server

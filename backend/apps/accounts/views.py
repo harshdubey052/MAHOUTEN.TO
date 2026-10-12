@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -47,13 +48,14 @@ class RegisterView(APIView):
         }, status=status.HTTP_201_CREATED)
 
         # Set refresh token in httpOnly cookie
+        is_prod = not getattr(settings, 'DEBUG', True)
         response.set_cookie(
             key='refresh_token',
             value=tokens['refresh'],
             httponly=True,
-            samesite='Lax',
+            samesite='None' if is_prod else 'Lax',
             max_age=7 * 24 * 3600,
-            secure=False # True in production HTTPS
+            secure=is_prod
         )
         return response
 
@@ -84,13 +86,14 @@ class LoginView(APIView):
             'profiles': ProfileSerializer(user_profiles, many=True).data,
         }, status=status.HTTP_200_OK)
 
+        is_prod = not getattr(settings, 'DEBUG', True)
         response.set_cookie(
             key='refresh_token',
             value=tokens['refresh'],
             httponly=True,
-            samesite='Lax',
+            samesite='None' if is_prod else 'Lax',
             max_age=7 * 24 * 3600,
-            secure=False
+            secure=is_prod
         )
         return response
 

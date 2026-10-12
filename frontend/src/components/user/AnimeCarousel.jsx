@@ -5,6 +5,7 @@ import { Play, Plus, Check, Star, ChevronLeft, ChevronRight } from 'lucide-react
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { libraryApi } from '../../api';
 import { useProfile } from '../../context/ProfileContext';
+import { getMediaUrl } from '../../utils/media';
 
 export function AnimeCard({ anime, size = 'normal', variant = 'poster' }) {
   const [hovered, setHovered] = useState(false);
@@ -40,7 +41,7 @@ export function AnimeCard({ anime, size = 'normal', variant = 'poster' }) {
       >
         <div className="relative rounded-card-lg overflow-hidden aspect-video bg-surface-1 border border-border-subtle">
           <img
-            src={anime.banner || anime.poster || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&h=340&fit=crop'}
+            src={getMediaUrl(anime.banner || anime.poster, 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&h=340&fit=crop')}
             alt={anime.title}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
@@ -77,7 +78,7 @@ export function AnimeCard({ anime, size = 'normal', variant = 'poster' }) {
       {/* Poster Card */}
       <div className="relative rounded-card-sm overflow-hidden aspect-[2/3] bg-surface-1 border border-border-subtle transition-all duration-300 group-hover:border-border-strong group-hover:shadow-lg">
         <img
-          src={anime.poster || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&h=600&fit=crop'}
+          src={getMediaUrl(anime.poster, 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&h=600&fit=crop')}
           alt={anime.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           loading="lazy"

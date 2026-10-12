@@ -19,6 +19,7 @@ from apps.adminpanel.serializers import (
     BulkEpisodesSerializer, AdminUserSerializer, AuditLogSerializer
 )
 from apps.streaming.tasks import process_video_to_hls
+from mahouten.media_service import upload_image, upload_video, upload_raw
 
 def record_audit(admin_user, action, entity_type, entity_id, details=''):
     try:
@@ -107,6 +108,7 @@ class AdminStatsView(APIView):
 
 class AdminShowListCreateView(APIView):
     permission_classes = [IsAdminRole]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
         qs = Anime.objects.all()
@@ -136,7 +138,30 @@ class AdminShowListCreateView(APIView):
         })
 
     def post(self, request):
-        serializer = AdminShowSerializer(data=request.data)
+        payload = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
+
+        # Upload poster image file if provided
+        poster_file = request.FILES.get('poster') or request.FILES.get('poster_file')
+        if poster_file:
+            uploaded = upload_image(poster_file, folder='mahouten/posters')
+            payload['poster'] = uploaded.get('url', '')
+
+        # Upload banner image file if provided
+        banner_file = request.FILES.get('banner') or request.FILES.get('banner_file')
+        if banner_file:
+            uploaded = upload_image(banner_file, folder='mahouten/banners')
+            payload['banner'] = uploaded.get('url', '')
+
+        # Handle raw genres parsing (JSON or comma separated)
+        raw_genres = payload.get('genres')
+        if isinstance(raw_genres, str):
+            try:
+                import json
+                payload['genres'] = json.loads(raw_genres)
+            except Exception:
+                payload['genres'] = [g.strip() for g in raw_genres.split(',') if g.strip()]
+
+        serializer = AdminShowSerializer(data=payload)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -155,12 +180,12 @@ class AdminShowListCreateView(APIView):
             slug=slug,
             synopsis=data.get('synopsis', ''),
             genres=data.get('genres', []),
-            year=data.get('year', 2024),
-            studio=data.get('studio', 'Mappa'),
+            year=data.get('year') or datetime.datetime.utcnow().year,
+            studio=data.get('studio', ''),
             status=data.get('status', 'ongoing'),
             type=data.get('type', 'series'),
-            rating=data.get('rating', 8.0),
-            age_rating=data.get('age_rating', 'PG-13'),
+            rating=data.get('rating', 0.0),
+            age_rating=data.get('age_rating', ''),
             poster=data.get('poster', ''),
             banner=data.get('banner', ''),
             trailer_url=data.get('trailer_url', ''),
@@ -186,6 +211,7 @@ class AdminShowListCreateView(APIView):
 
 class AdminShowDetailView(APIView):
     permission_classes = [IsAdminRole]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_object(self, pk):
         return Anime.objects(id=pk).first()
@@ -201,9 +227,30 @@ class AdminShowDetailView(APIView):
         if not show:
             return Response({'error': 'Show not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        # Upload poster image file if provided
+        poster_file = request.FILES.get('poster') or request.FILES.get('poster_file')
+        if poster_file:
+            uploaded = upload_image(poster_file, folder='mahouten/posters')
+            show.poster = uploaded.get('url', '')
+
+        # Upload banner image file if provided
+        banner_file = request.FILES.get('banner') or request.FILES.get('banner_file')
+        if banner_file:
+            uploaded = upload_image(banner_file, folder='mahouten/banners')
+            show.banner = uploaded.get('url', '')
+
         for key, value in request.data.items():
+            if key in ['poster', 'banner'] and (request.FILES.get(key) or request.FILES.get(f"{key}_file")):
+                continue
             if hasattr(show, key) and key not in ['id', 'created_at']:
-                setattr(show, key, value)
+                if key == 'genres' and isinstance(value, str):
+                    try:
+                        import json
+                        setattr(show, key, json.loads(value))
+                    except Exception:
+                        setattr(show, key, [g.strip() for g in value.split(',') if g.strip()])
+                else:
+                    setattr(show, key, value)
 
         show.updated_at = datetime.datetime.utcnow()
         show.save()
@@ -426,17 +473,24 @@ class AdminEpisodeUploadVideoView(APIView):
         if not video_file:
             return Response({'error': 'No video file provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Ensure directory exists
-        upload_dir = Path(settings.MEDIA_ROOT) / 'videos'
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        uploaded = upload_video(video_file, folder='mahouten/videos')
 
-        ext = Path(video_file.name).suffix.lower() or '.mp4'
-        file_path = upload_dir / f"{episode.id}_{uuid.uuid4().hex[:8]}{ext}"
+        if uploaded.get('storage') == 'cloudinary':
+            episode.video_source_type = 'upload'
+            episode.processing_status = 'ready'
+            episode.hls_url = uploaded['url']
+            episode.save()
 
-        with open(file_path, 'wb+') as destination:
-            for chunk in video_file.chunks():
-                destination.write(chunk)
+            record_audit(request.user, 'update', 'episode', episode.id, "Uploaded video file to Cloudinary CDN")
+            return Response({
+                'message': 'Video uploaded successfully to Cloudinary.',
+                'processing_status': 'ready',
+                'hls_url': uploaded['url'],
+                'episode_id': str(episode.id)
+            }, status=status.HTTP_200_OK)
 
+        # Fallback local transcoding via FFmpeg
+        file_path = uploaded.get('local_path')
         episode.video_source_type = 'upload'
         episode.processing_status = 'processing'
         episode.save()
@@ -449,7 +503,7 @@ class AdminEpisodeUploadVideoView(APIView):
             import threading
             threading.Thread(target=process_video_to_hls, args=(str(episode.id), str(file_path))).start()
 
-        record_audit(request.user, 'update', 'episode', episode.id, "Uploaded video file for HLS transcoding")
+        record_audit(request.user, 'update', 'episode', episode.id, "Uploaded video file for local HLS transcoding")
         return Response({
             'message': 'Video uploaded successfully. Transcoding started.',
             'processing_status': 'processing',
@@ -481,19 +535,12 @@ class AdminUploadImageView(APIView):
         if not image_file:
             return Response({'error': 'No image file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
-        img_dir = Path(settings.MEDIA_ROOT) / 'images'
-        img_dir.mkdir(parents=True, exist_ok=True)
-
-        ext = Path(image_file.name).suffix.lower() or '.jpg'
-        filename = f"{uuid.uuid4().hex}{ext}"
-        destination_path = img_dir / filename
-
-        with open(destination_path, 'wb+') as destination:
-            for chunk in image_file.chunks():
-                destination.write(chunk)
-
-        url = f"/media/images/{filename}"
-        return Response({'url': url, 'filename': filename}, status=status.HTTP_201_CREATED)
+        uploaded = upload_image(image_file, folder='mahouten/images')
+        return Response({
+            'url': uploaded.get('url'),
+            'filename': uploaded.get('public_id'),
+            'storage': uploaded.get('storage')
+        }, status=status.HTTP_201_CREATED)
 
 
 class AdminUploadSubtitleView(APIView):
@@ -505,19 +552,12 @@ class AdminUploadSubtitleView(APIView):
         if not subtitle_file:
             return Response({'error': 'No subtitle file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
-        sub_dir = Path(settings.MEDIA_ROOT) / 'subtitles'
-        sub_dir.mkdir(parents=True, exist_ok=True)
-
-        ext = Path(subtitle_file.name).suffix.lower() or '.vtt'
-        filename = f"{uuid.uuid4().hex}{ext}"
-        destination_path = sub_dir / filename
-
-        with open(destination_path, 'wb+') as destination:
-            for chunk in subtitle_file.chunks():
-                destination.write(chunk)
-
-        url = f"/media/subtitles/{filename}"
-        return Response({'url': url, 'filename': filename}, status=status.HTTP_201_CREATED)
+        uploaded = upload_raw(subtitle_file, folder='mahouten/subtitles')
+        return Response({
+            'url': uploaded.get('url'),
+            'filename': uploaded.get('public_id'),
+            'storage': uploaded.get('storage')
+        }, status=status.HTTP_201_CREATED)
 
 
 class AdminUserListView(APIView):

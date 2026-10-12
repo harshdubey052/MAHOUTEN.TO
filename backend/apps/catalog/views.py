@@ -183,51 +183,65 @@ class HomeRowsView(APIView):
                     'items': AnimeListSerializer(animes, many=True).data
                 })
 
-        rows = [
-            {
+        rows = []
+        if trending:
+            t_data = AnimeListSerializer(trending, many=True).data
+            rows.append({
                 'id': 'trending',
                 'title': 'Trending Now',
                 'row_type': 'trending',
-                'items': AnimeListSerializer(trending, many=True).data,
-            },
-            {
+                'items': t_data,
+                'anime': t_data,
+            })
+        if new_releases:
+            n_data = AnimeListSerializer(new_releases, many=True).data
+            rows.append({
                 'id': 'new_releases',
                 'title': 'New Releases',
                 'row_type': 'new_releases',
-                'items': AnimeListSerializer(new_releases, many=True).data,
-            },
-            {
+                'items': n_data,
+                'anime': n_data,
+            })
+        if top_rated:
+            r_data = AnimeListSerializer(top_rated, many=True).data
+            rows.append({
                 'id': 'top_rated',
                 'title': 'Top Rated Masterpieces',
                 'row_type': 'top_rated',
-                'items': AnimeListSerializer(top_rated, many=True).data,
-            },
-        ]
-
+                'items': r_data,
+                'anime': r_data,
+            })
         if action_row:
+            act_data = AnimeListSerializer(action_row, many=True).data
             rows.append({
                 'id': 'genre_action',
                 'title': 'High-Octane Action',
                 'row_type': 'genre',
-                'items': AnimeListSerializer(action_row, many=True).data,
+                'items': act_data,
+                'anime': act_data,
             })
         if fantasy_row:
+            fan_data = AnimeListSerializer(fantasy_row, many=True).data
             rows.append({
                 'id': 'genre_fantasy',
                 'title': 'Magic & Supernatural Fantasy',
                 'row_type': 'genre',
-                'items': AnimeListSerializer(fantasy_row, many=True).data,
+                'items': fan_data,
+                'anime': fan_data,
             })
         if romance_row:
+            rom_data = AnimeListSerializer(romance_row, many=True).data
             rows.append({
                 'id': 'genre_romance',
                 'title': 'Romance & Slice of Life',
                 'row_type': 'genre',
-                'items': AnimeListSerializer(romance_row, many=True).data,
+                'items': rom_data,
+                'anime': rom_data,
             })
 
-        # Add custom admin curated rows
-        rows.extend(custom_rows)
+        for cr in custom_rows:
+            cr['anime'] = cr.get('items', [])
+            rows.append(cr)
 
         return Response({
             'hero': AnimeListSerializer(hero_items, many=True).data,
@@ -351,51 +365,32 @@ class StudioUploadView(APIView):
         video_url = data.get('video_url', '').strip()
 
         # Upload poster image file if provided
+        from mahouten.media_service import upload_image, upload_video
+
         poster_file = request.FILES.get('poster_file')
         if poster_file:
-            img_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'posters'
-            img_dir.mkdir(parents=True, exist_ok=True)
-            ext = Path(poster_file.name).suffix.lower() or '.jpg'
-            filename = f"{uuid.uuid4().hex}{ext}"
-            dest = img_dir / filename
-            with open(dest, 'wb+') as f:
-                for chunk in poster_file.chunks():
-                    f.write(chunk)
-            poster_url = f"/media/uploads/posters/{filename}"
+            uploaded = upload_image(poster_file, folder='mahouten/posters')
+            poster_url = uploaded.get('url', '')
 
         # Upload banner image file if provided
         banner_file = request.FILES.get('banner_file')
         if banner_file:
-            ban_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'banners'
-            ban_dir.mkdir(parents=True, exist_ok=True)
-            ext = Path(banner_file.name).suffix.lower() or '.jpg'
-            filename = f"{uuid.uuid4().hex}{ext}"
-            dest = ban_dir / filename
-            with open(dest, 'wb+') as f:
-                for chunk in banner_file.chunks():
-                    f.write(chunk)
-            banner_url = f"/media/uploads/banners/{filename}"
+            uploaded = upload_image(banner_file, folder='mahouten/banners')
+            banner_url = uploaded.get('url', '')
 
         # Upload video file if provided
         video_file = request.FILES.get('video_file')
         if video_file:
-            vid_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'videos'
-            vid_dir.mkdir(parents=True, exist_ok=True)
-            ext = Path(video_file.name).suffix.lower() or '.mp4'
-            filename = f"{uuid.uuid4().hex}{ext}"
-            dest = vid_dir / filename
-            with open(dest, 'wb+') as f:
-                for chunk in video_file.chunks():
-                    f.write(chunk)
-            video_url = f"/media/uploads/videos/{filename}"
+            uploaded = upload_video(video_file, folder='mahouten/videos')
+            video_url = uploaded.get('url', '')
 
         if not video_url:
-            video_url = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+            video_url = ""
 
         if not poster_url:
-            poster_url = "/wallpaper.png"
+            poster_url = ""
         if not banner_url:
-            banner_url = poster_url if poster_url != "/wallpaper.png" else "/wallpaper.png"
+            banner_url = poster_url
 
         # Unique slug
         base_slug = slugify(title) or f"upload-{uuid.uuid4().hex[:6]}"
@@ -415,7 +410,7 @@ class StudioUploadView(APIView):
         elif isinstance(raw_genres, list):
             genres = raw_genres
         else:
-            genres = ['Action']
+            genres = []
 
         content_type = data.get('type', 'series')
         if content_type not in ('series', 'movie', 'clip'):
