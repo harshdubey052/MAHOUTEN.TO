@@ -188,12 +188,21 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:3000',
 ]
 
+CORS_ALLOWED_ORIGINS = [
+    'https://mahouten-to.vercel.app',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+
 _EXTRA_CORS = os.getenv('CORS_ALLOWED_ORIGINS', '')
 if _EXTRA_CORS:
     for origin in _EXTRA_CORS.split(','):
         origin = origin.strip()
-        if origin and origin not in CSRF_TRUSTED_ORIGINS:
-            CSRF_TRUSTED_ORIGINS.append(origin)
+        if origin:
+            if origin not in CORS_ALLOWED_ORIGINS:
+                CORS_ALLOWED_ORIGINS.append(origin)
+            if origin not in CSRF_TRUSTED_ORIGINS:
+                CSRF_TRUSTED_ORIGINS.append(origin)
 
 # Cross-Site Cookie Defaults for Decoupled Frontend (Vercel) & Backend (Render)
 SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
@@ -242,4 +251,3 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
-
