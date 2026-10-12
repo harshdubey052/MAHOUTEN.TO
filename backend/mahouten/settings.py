@@ -168,6 +168,8 @@ else:
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+from corsheaders.defaults import default_headers
+
 # CORS & CSRF Configuration for Vercel + Render
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
@@ -203,6 +205,18 @@ if _EXTRA_CORS:
                 CORS_ALLOWED_ORIGINS.append(origin)
             if origin not in CSRF_TRUSTED_ORIGINS:
                 CSRF_TRUSTED_ORIGINS.append(origin)
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'ngrok-skip-browser-warning',
+    'x-requested-with',
+]
+
+_EXTRA_CORS_HEADERS = os.getenv('CORS_ALLOW_HEADERS', '')
+if _EXTRA_CORS_HEADERS:
+    for header in _EXTRA_CORS_HEADERS.split(','):
+        h = header.strip()
+        if h and h not in CORS_ALLOW_HEADERS:
+            CORS_ALLOW_HEADERS.append(h)
 
 # Cross-Site Cookie Defaults for Decoupled Frontend (Vercel) & Backend (Render)
 SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
@@ -251,3 +265,4 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
+
