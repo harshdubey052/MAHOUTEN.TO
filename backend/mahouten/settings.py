@@ -84,28 +84,34 @@ MONGO_HOST = os.getenv('MONGO_HOST', 'localhost')
 MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
 MONGO_URI = os.getenv('MONGO_URI', f'mongodb://{MONGO_HOST}:{MONGO_PORT}/{MONGO_DB_NAME}')
 
-try:
-    import pymongo
-    timeout_ms = 5000 if ('mongodb+srv://' in MONGO_URI or '@' in MONGO_URI) else 800
-    test_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=timeout_ms)
-    test_client.server_info()
-    mongoengine.connect(
-        db=MONGO_DB_NAME,
-        host=MONGO_URI,
-        connect=True
-    )
-    print("[MongoDB] Connected successfully to live MongoDB instance.")
-except Exception as live_err:
+# Skip MongoDB connection during Render build (collectstatic phase)
+_SKIP_MONGO = os.getenv('RENDER_BUILD', '') == '1'
+
+if not _SKIP_MONGO:
     try:
-        import mongomock
+        import pymongo
+        timeout_ms = 5000 if ('mongodb+srv://' in MONGO_URI or '@' in MONGO_URI) else 800
+        test_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=timeout_ms)
+        test_client.server_info()
         mongoengine.connect(
             db=MONGO_DB_NAME,
             host=MONGO_URI,
-            mongo_client_class=mongomock.MongoClient
+            connect=True
         )
-        print(f"[MongoDB] Live MongoDB offline ({live_err}); using resilient in-memory MongoDB engine.")
-    except Exception as e:
-        print(f"[MongoDB Warning] Connection error: {e}")
+        print("[MongoDB] Connected successfully to live MongoDB instance.")
+    except Exception as live_err:
+        try:
+            import mongomock
+            mongoengine.connect(
+                db=MONGO_DB_NAME,
+                host=MONGO_URI,
+                mongo_client_class=mongomock.MongoClient
+            )
+            print(f"[MongoDB] Live MongoDB offline ({live_err}); using resilient in-memory MongoDB engine.")
+        except Exception as e:
+            print(f"[MongoDB Warning] Connection error: {e}")
+else:
+    print("[MongoDB] Skipping connection during build phase.")
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 6}},

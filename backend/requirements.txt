@@ -13,4 +13,5 @@ requests>=2.32.3
 gunicorn>=23.0.0
 whitenoise>=6.7.0
 dnspython>=2.6.1
+mongomock>=4.1.2
 
